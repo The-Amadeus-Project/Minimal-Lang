@@ -1,0 +1,345 @@
+use crate::builder_dir::builder::Builder;
+use crate::parser::{BinaryOperation, ConstValue, Node, VariableType};
+use std::collections::HashMap;
+
+
+fn dword_reg(register: String) -> String{
+    match &*register {
+        "rax" => "eax".to_string(),
+        "rdi" => "edi".to_string(),
+        "rsi" => "esi".to_string(),
+        "rdx" => "edx".to_string(),
+        "rbx" => "ebx".to_string(),
+        "rcx" => "ecx".to_string(),
+        _ => unreachable!()
+    }
+}
+fn word_reg(register: String) -> String{
+    match &*register {
+        "rax" => "ax".to_string(),
+        "rdi" => unreachable!(),
+        "rsi" => unreachable!(),
+        "rdx" => "dx".to_string(),
+        "rbx" => "bx".to_string(),
+        "rcx" => "cx".to_string(),
+        _ => unreachable!()
+    }
+}
+pub struct Compiler {
+    ast: Node,
+    pub builder: Builder,
+    local_variables: HashMap<String, usize>,
+    string_literal_count: usize,
+    unused_registers: Vec<String>
+}
+
+impl Compiler {
+    pub fn new(ast: Node) -> Self {
+        let mut new = Self {
+            ast,
+            builder: Builder::new_program("main"),
+            local_variables: HashMap::new(),
+            string_literal_count: 0,
+            unused_registers: vec![
+                "rax".to_string(),
+                "rdi".to_string(),
+                "rsi".to_string(),
+                "rdx".to_string(),
+                "rbx".to_string(),
+                "rcx".to_string(),
+            ]
+        };
+        new.unused_registers.reverse();
+        new
+    }
+    pub fn bin_op(&mut self, left: Node, op: BinaryOperation, right: Node) -> String{
+        let mut last_register = "".to_string();
+        let mut last_value = ConstValue::Integer {
+            value: 0
+        };
+        match right {
+            Node::Const { value_type } => {
+                last_value = value_type;
+            }
+            Node::BinaryOp { left, op, right } => {
+                last_register = self.bin_op(*left, op, *right);
+            }
+            _ => unreachable!()
+        }
+        match left {
+            Node::Const { value_type } => {
+                if !last_register.is_empty() {
+                    unimplemented!()
+                } else {
+                    match value_type {
+                        ConstValue::String { .. } => {
+                            match last_value {
+                                ConstValue::String { .. } => {
+                                    unimplemented!()
+                                }
+                                ConstValue::Integer { .. } => {
+                                    unimplemented!()
+                                }
+                                ConstValue::Boolean { .. } => {
+                                    unimplemented!()
+                                }
+                                ConstValue::FloatingPoint { .. } => {
+                                    unimplemented!()
+                                }
+                            }
+                        }
+                        ConstValue::Integer { value } => {
+                            let left_value = value;
+                            match last_value {
+                                ConstValue::String { .. } => {
+                                    unimplemented!()
+                                }
+                                ConstValue::Integer { value } => {
+                                    let eval = left_value + value;
+                                    let register = self.unused_registers.pop().unwrap();
+                                    self.builder.mov(&*register.clone(), &*eval.to_string());
+                                    return register
+                                }
+                                ConstValue::Boolean { .. } => {
+                                    unimplemented!()
+                                }
+                                ConstValue::FloatingPoint { .. } => {
+                                    unimplemented!()
+                                }
+                            }
+                        }
+                        ConstValue::Boolean { .. } => {
+                            match last_value {
+                                ConstValue::String { .. } => {
+                                    unimplemented!()
+                                }
+                                ConstValue::Integer { .. } => {
+                                    unimplemented!()
+                                }
+                                ConstValue::Boolean { .. } => {
+                                    unimplemented!()
+                                }
+                                ConstValue::FloatingPoint { .. } => {
+                                    unimplemented!()
+                                }
+                            }
+                        }
+                        ConstValue::FloatingPoint { .. } => {
+                            match last_value {
+                                ConstValue::String { .. } => {
+                                    unimplemented!()
+                                }
+                                ConstValue::Integer { .. } => {
+                                    unimplemented!()
+                                }
+                                ConstValue::Boolean { .. } => {
+                                    unimplemented!()
+                                }
+                                ConstValue::FloatingPoint { .. } => {
+                                    unimplemented!()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Node::BinaryOp { left, op, right } => {
+                last_register = self.bin_op(*left, op, *right);
+            }
+            _ => unreachable!()
+        }
+        "".to_string()
+    }
+    pub fn assignment(&mut self, name: String, var_type: VariableType, value: Box<Node>) {
+        let var_id = self.local_variables.len();
+        self.local_variables.insert(name, var_id);
+        match var_type {
+            VariableType::String => {
+                unimplemented!()
+            }
+            VariableType::Integer => {
+                let mut int_value = 0;
+                match *value {
+                    Node::Expr { value } => match *value {
+                        Node::Const { value_type } => match value_type {
+                            ConstValue::Integer { value } => {
+                                self.builder.new_local_dword(value as u32);
+                            },
+                            _ => {
+                                panic!("dhd")
+                            }
+                        },
+                        Node::BinaryOp { left, op, right } => {
+                            let register = self.bin_op(*left, op, *right);
+                            self.builder.local_word_assign(4, "dword", &*dword_reg(register.clone()));
+                            self.unused_registers.push(register);
+                        }
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                }
+            }
+            VariableType::Boolean => {
+                unimplemented!()
+            }
+            VariableType::FloatingPoint => {
+                unimplemented!()
+            }
+            VariableType::Void => {
+                unreachable!()
+            }
+        }
+    }
+    pub fn function(
+        &mut self,
+        name: String,
+        _return_type: VariableType,
+        _args: Vec<Box<Node>>,
+        body: Vec<Box<Node>>,
+    ) {
+        self.builder.open_function(&*name);
+        for part in body {
+            self.single(*part);
+        }
+        self.builder.close_function();
+    }
+
+    pub fn function_call(&mut self, function_name: String, args: Vec<Box<Node>>) {
+        let mut new_args = vec![];
+        for arg in args {
+            match *arg {
+                Node::Expr { value } => match *value {
+                    Node::Const { value_type } => match value_type {
+                        ConstValue::String { value } => {
+                            self.string_literal_count += 1;
+                            self.builder.new_string_literal(
+                                &*format!("local_string_{}", self.string_literal_count),
+                                &*value,
+                            );
+                            new_args.push(format!("local_string_{}", self.string_literal_count));
+                        }
+                        ConstValue::Integer { value } => new_args.push(value.to_string()),
+                        ConstValue::Boolean { value } => {
+                            unimplemented!("{}", value)
+                        }
+                        ConstValue::FloatingPoint { value } => {
+                            unimplemented!("{}", value)
+                        }
+                    },
+                    Node::FunctionCall { .. } => {
+                        unimplemented!()
+                    }
+                    Node::VariableReference { .. } => {
+                        unimplemented!()
+                    }
+                    Node::BinaryOp { .. } => {
+                        unimplemented!()
+                    }
+                    _ => {
+                        unreachable!()
+                    }
+                },
+
+                _ => {
+                    unreachable!()
+                }
+            }
+        }
+        let mut len = -1;
+        for argument in new_args {
+            len += 1;
+            let register = &*self
+                .builder
+                .func_args_order
+                .get(len as usize)
+                .unwrap()
+                .clone();
+            self.builder.mov(register, &*argument);
+        }
+
+        self.builder.call(&*function_name);
+    }
+
+    fn return_function(&mut self, value: Box<Node>) {
+        match *value {
+            Node::Expr { value } => match *value {
+                Node::Const { value_type } => match value_type {
+                    ConstValue::String { value } => {
+                        self.string_literal_count += 1;
+                        self.builder.new_string_literal(
+                            &*format!("local_string_{}", self.string_literal_count),
+                            &*value,
+                        );
+                        self.builder.mov(
+                            "rax",
+                            &*format!("local_string_{}", self.string_literal_count),
+                        );
+                    }
+                    ConstValue::Integer { value } => {
+                        self.builder.mov("rax", &*value.to_string());
+                    }
+                    ConstValue::Boolean { value } => {
+                        unimplemented!("{}", value)
+                    }
+                    ConstValue::FloatingPoint { value } => {
+                        unimplemented!("{}", value)
+                    }
+                },
+                Node::FunctionCall { .. } => {
+                    unimplemented!()
+                }
+                Node::VariableReference { .. } => {
+                    unimplemented!()
+                }
+                Node::BinaryOp { .. } => {
+                    unimplemented!()
+                }
+                _ => {
+                    unreachable!()
+                }
+            },
+            _ => {
+                unreachable!()
+            }
+        }
+    }
+
+    pub fn single(&mut self, node: Node) {
+        match node {
+            Node::Assign {
+                name,
+                var_type,
+                value,
+            } => self.assignment(name, var_type, value),
+            Node::Function {
+                name,
+                return_type,
+                args,
+                body,
+            } => {
+                self.function(name, return_type, args, body);
+            }
+            Node::FunctionCall { name, args } => self.function_call(name, args),
+            Node::Return { value } => self.return_function(value),
+            _ => {
+                panic!("what {:?}", node)
+            }
+        }
+    }
+    pub fn run(&mut self) -> String {
+        self.builder.extern_add("printf");
+        match self.ast.clone() {
+            Node::Program { body } => {
+                for part in body {
+                    self.single(*part)
+                }
+            }
+            _ => {}
+        }
+
+        self.builder.build_no_start()
+    }
+    pub fn compile(ast: Node) -> String {
+        Compiler::new(ast).run()
+    }
+}
