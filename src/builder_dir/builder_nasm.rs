@@ -22,6 +22,7 @@ pub struct Builder {
     bss: String,
     data: String,
     function_body: String,
+    function_head: String,
     is_function_currently: bool,
     local_variables: Vec<u32>,
     local_variables_offset: Vec<u32>,
@@ -37,6 +38,7 @@ impl Default for Builder {
             bss: ASM_BASE_BSS.to_string(),
             data: ASM_BASE_DATA.to_string(),
             function_body: "".to_string(),
+            function_head: "".to_string(),
             is_function_currently: false,
             local_variables: vec![],
             local_variables_offset: vec![],
@@ -86,28 +88,34 @@ impl Builder {
             Return::new("".to_string(), Code::Good)
         }
     }
-    fn add_line_text(&mut self, line: &str) {
+    pub fn add_line_text(&mut self, line: &str) {
         self.text += &*format!("\t{}\n", line)
     }
-    fn add_value_text(&mut self, line: &str) {
+    pub fn add_value_text(&mut self, line: &str) {
         self.text += &*format!("\t\t{}\n", line)
     }
-    fn add_line_function(&mut self, line: &str) {
+    pub fn add_line_function(&mut self, line: &str) {
         self.function_body += &*format!("\t{}\n", line)
     }
-    fn add_value_function(&mut self, line: &str) {
+    pub fn add_value_function(&mut self, line: &str) {
         self.function_body += &*format!("\t\t{}\n", line)
     }
-    fn add_line_bss(&mut self, line: &str) {
+    pub fn add_line_function_head(&mut self, line: &str) {
+        self.function_head += &*format!("\t{}\n", line)
+    }
+    pub fn add_value_function_head(&mut self, line: &str) {
+        self.function_head += &*format!("\t\t{}\n", line)
+    }
+    pub fn add_line_bss(&mut self, line: &str) {
         self.bss += &*format!("\t{}\n", line)
     }
-    fn add_value_bss(&mut self, line: &str) {
+    pub fn add_value_bss(&mut self, line: &str) {
         self.bss += &*format!("\t\t{}\n", line)
     }
-    fn add_line_data(&mut self, line: &str) {
+    pub fn add_line_data(&mut self, line: &str) {
         self.data += &*format!("\t{}\n", line)
     }
-    fn add_value_data(&mut self, line: &str) {
+    pub fn add_value_data(&mut self, line: &str) {
         self.data += &*format!("\t\t{}\n", line)
     }
 
@@ -123,9 +131,9 @@ impl Builder {
             );
         }
         self.is_function_currently = true;
-        self.function_body += &*format!("{}:\n", function_name);
-        self.push("rbp");
-        self.mov("rbp", "rsp");
+        self.function_head += &*format!("{}:\n", function_name);
+        self.add_value_function_head(&*format!("push\t\t\trbp"));
+        self.add_value_function_head(&*format!("mov\t\t\t\trbp, rsp"));
 
         Return::new("Everything Is Fine".to_string(), Code::Good)
     }
@@ -137,14 +145,19 @@ impl Builder {
                 Code::ClosingOfNonFunctionErr,
             );
         }
+        if self.local_offset > 0 {
+            self.add_value_function_head(&*format!("sub\t\t\t\trsp, {}", self.local_offset / 12 * 2 + 12));
+        }
         self.local_offset = 0;
         self.local_variables = vec![];
         self.local_variables_offset = vec![];
         self.is_function_currently = false;
         self.pop("rbp");
         self.add_value_function("ret");
-        self.add_line_text(&*self.function_body.clone());
+        self.function_head += &*self.function_body.clone();
+        self.add_line_text(&*self.function_head.clone());
         self.function_body = "".to_string();
+        self.function_head = "".to_string();
         Return::new("".to_string(), Code::Good)
     }
 
