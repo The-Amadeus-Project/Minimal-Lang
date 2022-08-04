@@ -14,7 +14,7 @@ fn pre_compile(file_path: &str, debug: bool) -> Node {
     Parser::parse_tokens(lexed)
     // Checker::check_instructions(returned_lexed.clone());
 }
-pub fn compile(file_path: &str, debug: bool) {
+pub fn compile(file_path: &str, debug: bool) -> String {
     // let parsed = pre_compile(file_path, debug);
     // println!(
     //     "{:#?}\n--------------------------------------------------------\n",
@@ -38,14 +38,14 @@ pub fn compile(file_path: &str, debug: bool) {
                                     left: Box::new(
                                         Node::Const {
                                             value_type: ConstValue::Integer {
-                                                value: 32
+                                                value: 1
                                             }
                                         }
                                     ),
                                     op: BinaryOperation::Add,
                                     right: Box::new(Node::Const {
                                             value_type: ConstValue::Integer {
-                                                value: 543
+                                                value: 1
                                             }
                                         }
                                     )
@@ -83,5 +83,5 @@ pub fn compile(file_path: &str, debug: bool) {
     program.builder.mov("eax", "0");
     program.builder.call_function("printf", vec!["put_i_fmt_str"]);
     program.builder.close_function();
-    println!("{}", program.run());
+    return program.run()
 }
