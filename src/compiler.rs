@@ -1,4 +1,4 @@
-use crate::builder_dir::builder::Builder;
+use crate::builder_dir::builder_gas::Builder;
 use crate::parser::{BinaryOperation, ConstValue, Node, VariableType};
 use std::collections::HashMap;
 
@@ -202,42 +202,62 @@ impl Compiler {
             self.single(*part);
         }
         self.builder.close_function();
+        self.local_variables = HashMap::new();
+    }
+    pub fn expr_handler(&mut self, expr_value: Node) -> String {
+        match expr_value {
+            Node::Const { value_type } => match value_type {
+                ConstValue::String { value } => {
+                    self.string_literal_count += 1;
+                    self.builder.new_string_literal(
+                        &*format!("local_string_{}", self.string_literal_count),
+                        &*value,
+                    );
+                    format!("local_string_{}", self.string_literal_count)
+                }
+                ConstValue::Integer { value } => value.to_string(),
+                ConstValue::Boolean { value } => {
+                    unimplemented!("{}", value)
+                }
+                ConstValue::FloatingPoint { value } => {
+                    unimplemented!("{}", value)
+                }
+            },
+            Node::FunctionCall { .. } => {
+                unimplemented!()
+            }
+            Node::VariableReference { name } => {
+                let variable_id = self.local_variables.get(&*name).unwrap().clone();
+                let (_res, var_size, var_loc) = self.builder.get_local_word_size_and_offset(variable_id);
+                match var_size {
+                    2 => {
+                        format!("word [rsp - {}]", var_loc)
+                    }
+                    4 => {
+                        format!("dword [rsp - {}]", var_loc)
+                    }
+                    8 => {
+                        format!("qword [rsp - {}]", var_loc)
+                    }
+
+                    _ => unreachable!()
+                }
+            }
+            Node::BinaryOp { .. } => {
+                unimplemented!()
+            }
+            _ => {
+                unreachable!()
+            }
+        }
     }
 
     pub fn function_call(&mut self, function_name: String, args: Vec<Box<Node>>) {
         let mut new_args = vec![];
         for arg in args {
             match *arg {
-                Node::Expr { value } => match *value {
-                    Node::Const { value_type } => match value_type {
-                        ConstValue::String { value } => {
-                            self.string_literal_count += 1;
-                            self.builder.new_string_literal(
-                                &*format!("local_string_{}", self.string_literal_count),
-                                &*value,
-                            );
-                            new_args.push(format!("local_string_{}", self.string_literal_count));
-                        }
-                        ConstValue::Integer { value } => new_args.push(value.to_string()),
-                        ConstValue::Boolean { value } => {
-                            unimplemented!("{}", value)
-                        }
-                        ConstValue::FloatingPoint { value } => {
-                            unimplemented!("{}", value)
-                        }
-                    },
-                    Node::FunctionCall { .. } => {
-                        unimplemented!()
-                    }
-                    Node::VariableReference { .. } => {
-                        unimplemented!()
-                    }
-                    Node::BinaryOp { .. } => {
-                        unimplemented!()
-                    }
-                    _ => {
-                        unreachable!()
-                    }
+                Node::Expr { value } => {
+                    new_args.push(self.expr_handler(*value))
                 },
 
                 _ => {
@@ -262,41 +282,9 @@ impl Compiler {
 
     fn return_function(&mut self, value: Box<Node>) {
         match *value {
-            Node::Expr { value } => match *value {
-                Node::Const { value_type } => match value_type {
-                    ConstValue::String { value } => {
-                        self.string_literal_count += 1;
-                        self.builder.new_string_literal(
-                            &*format!("local_string_{}", self.string_literal_count),
-                            &*value,
-                        );
-                        self.builder.mov(
-                            "rax",
-                            &*format!("local_string_{}", self.string_literal_count),
-                        );
-                    }
-                    ConstValue::Integer { value } => {
-                        self.builder.mov("rax", &*value.to_string());
-                    }
-                    ConstValue::Boolean { value } => {
-                        unimplemented!("{}", value)
-                    }
-                    ConstValue::FloatingPoint { value } => {
-                        unimplemented!("{}", value)
-                    }
-                },
-                Node::FunctionCall { .. } => {
-                    unimplemented!()
-                }
-                Node::VariableReference { .. } => {
-                    unimplemented!()
-                }
-                Node::BinaryOp { .. } => {
-                    unimplemented!()
-                }
-                _ => {
-                    unreachable!()
-                }
+            Node::Expr { value } =>  {
+                let ret_val = &*self.expr_handler(*value).clone();
+                self.builder.mov("rax", ret_val);
             },
             _ => {
                 unreachable!()
